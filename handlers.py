@@ -4,6 +4,9 @@ from telegram.ext import ContextTypes
 from storage import read_json, write_json, read_text, write_text
 from messages import START_MSG, HELP_MSG
 from utils import ADMIN_IDS
+import random
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import CallbackQueryHandler
 
 # helper
 def is_admin(user_id: int) -> bool:
@@ -186,11 +189,55 @@ QUIZ_Q = {
     "answer_index": 2
 }
 
+
 async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [[opt] for opt in QUIZ_Q["options"]]
-    # simple reply keyboard
-    from telegram import ReplyKeyboardMarkup
-    await update.message.reply_text(QUIZ_Q["question"], reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True))
+    quizzes = read_json("quizzes.json", [])
+    if not quizzes:
+        await update.message.reply_text("Quiz မရှိသေးပါ။ Admin ထည့်ပေးပါ။")
+        return
+
+    q = random.choice(quizzes)
+    context.user_data["current_quiz"] = q
+
+    keyboard = [
+        [InlineKeyboardButton(opt, callback_data=f"quiz_{i}")]
+        for i, opt in enumerate(q["options"])
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(q["question"], reply_markup=reply_markup)
+
+async def quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    q = context.user_data.get("current_quiz")
+    if not q:
+        await query.edit_message_text("Quiz မရှိပါ။ /quiz ဖြင့် စတင်ပါ။")
+        return
+
+    choice = int(query.data.split("_")[1])
+    correct = q["answer_index"]
+
+    users = read_json("users.json", {})
+    uid = str(update.effective_user.id)
+    if uid not in users:
+        users[uid] = {"id": update.effective_user.id, "name": update.effective_user.full_name, "score": 0}
+
+    if choice == correct:
+        users[uid]["score"] += 1
+        write_json("users.json", users)
+        await query.edit_message_text(f"✅ မှန်ကန်ပါတယ်! အဖြေ: {q['options'][correct]}\n\nသင့် score: {users[uid]['score']}")
+    else:
+        await query.edit_message_text(f"❌ မှားသွားပါတယ်။ အမှန်အဖြေက {q['options'][correct]} ဖြစ်ပါတယ်။\n\nသင့် score: {users[uid]['score']}")
+
+async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    users = read_json("users.json", {})
+    if not users:
+        await update.message.reply_text("Leaderboard မရှိသေးပါ။")
+        return
+    sorted_users = sorted(users.values(), key=lambda u: u.get("score",0), reverse=True)
+    lines = [f"{i+1}. {u['name']} - {u.get('score',0)} points" for i,u in enumerate(sorted_users)]
+    await update.message.reply_text("🏆 Leaderboard\n" + "\n".join(lines))
 
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
