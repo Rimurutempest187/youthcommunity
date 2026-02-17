@@ -1,15 +1,26 @@
-import logging, os
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+import logging, os, random, datetime
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from utils import BOT_TOKEN
 import handlers
 from storage import read_json, write_json
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-import random
 
-# Scheduler
-scheduler = AsyncIOScheduler()
+# logs folder create
+os.makedirs("logs", exist_ok=True)
 
-async def send_daily_verse(context):
+logging.basicConfig(
+    filename="logs/bot.log",
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
+
+if not BOT_TOKEN:
+    raise RuntimeError("BOT_TOKEN is not set. Please set it in .env")
+
+# Bot application
+app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+# Daily verse job
+async def send_daily_verse(context: ContextTypes.DEFAULT_TYPE):
     verses = read_json("verses.json", [])
     if not verses:
         return
@@ -21,24 +32,8 @@ async def send_daily_verse(context):
         except Exception:
             continue
 
-# Job register (every day 8 AM)
-scheduler.add_job(send_daily_verse, "cron", hour=8, minute=0, args=[app])
-scheduler.start()
-
-
-os.makedirs("logs", exist_ok=True)
-
-logging.basicConfig(
-    filename="logs/bot.log",
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
-
-
-if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN is not set. Please set it in .env")
-
-app = ApplicationBuilder().token(BOT_TOKEN).build()
+# Register daily job at 8:00 AM
+app.job_queue.run_daily(send_daily_verse, time=datetime.time(hour=8, minute=0))
 
 # Register commands
 app.add_handler(CommandHandler("start", handlers.start))
