@@ -1,14 +1,18 @@
-import logging
+import logging, os
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from utils import BOT_TOKEN
 import handlers
 from storage import read_json, write_json
+
+
+os.makedirs("logs", exist_ok=True)
 
 logging.basicConfig(
     filename="logs/bot.log",
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
+
 
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN is not set. Please set it in .env")
