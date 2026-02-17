@@ -48,15 +48,58 @@ async def econtact(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(uid):
         await update.message.reply_text("သင်သည် admin မဟုတ်ပါ။")
         return
-    if len(context.args) < 2:
-        await update.message.reply_text("အသုံး: /econtact <Name> <Phone>")
+
+    if not context.args:
+        await update.message.reply_text(
+            "အသုံး: /econtact add|list|delete|clear\n"
+            "Examples:\n"
+            "/econtact add Name Phone\n"
+            "/econtact list\n"
+            "/econtact delete Name\n"
+            "/econtact clear confirm"
+        )
         return
-    name = context.args[0]
-    phone = context.args[1]
+
+    sub = context.args[0].lower()
     contacts = read_json("contacts.json", {})
-    contacts[name] = phone
-    write_json("contacts.json", contacts)
-    await update.message.reply_text("Contacts updated.")
+
+    if sub == "add":
+        if len(context.args) < 3:
+            await update.message.reply_text("အသုံး: /econtact add <Name> <Phone>")
+            return
+        name, phone = context.args[1], context.args[2]
+        contacts[name] = phone
+        write_json("contacts.json", contacts)
+        await update.message.reply_text(f"Contact added: {name} - {phone}")
+
+    elif sub == "list":
+        if not contacts:
+            await update.message.reply_text("Contacts မရှိသေးပါ။")
+            return
+        await update.message.reply_text("\n".join([f"{n} - {p}" for n, p in contacts.items()]))
+
+    elif sub == "delete":
+        if len(context.args) < 2:
+            await update.message.reply_text("အသုံး: /econtact delete <Name>")
+            return
+        name = context.args[1]
+        if name in contacts:
+            contacts.pop(name)
+            write_json("contacts.json", contacts)
+            await update.message.reply_text(f"Deleted contact: {name}")
+        else:
+            await update.message.reply_text(f"No contact named {name} found.")
+
+    elif sub == "clear":
+        if len(context.args) >= 2 and context.args[1].lower() == "confirm":
+            write_json("contacts.json", {})
+            await update.message.reply_text("All contacts cleared.")
+        else:
+            await update.message.reply_text("သတိပေးချက်: Contacts အားလုံး ဖျက်မည်။ ဆက်လက်ရန် `/econtact clear confirm` ရိုက်ပါ။")
+
+    else:
+        await update.message.reply_text("Unknown subcommand. Use add|list|delete|clear.")
+
 
 async def verse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     verses = read_json("verses.json", [])
