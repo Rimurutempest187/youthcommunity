@@ -1,9 +1,11 @@
 import logging
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from utils import BOT_TOKEN
 import handlers
+from storage import read_json, write_json
 
 logging.basicConfig(
+    filename="logs/bot.log",
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
@@ -34,10 +36,9 @@ app.add_handler(CommandHandler("stats", handlers.stats))
 app.add_handler(CommandHandler("language", handlers.language))
 app.add_handler(CommandHandler("report", handlers.report))
 
-# Optional: track groups when bot added
+# Track groups when bot is added to a group
 async def new_chat_member(update, context):
     chat = update.effective_chat
-    from storage import read_json, write_json
     groups = read_json("groups.json", [])
     if str(chat.id) not in groups:
         groups.append(str(chat.id))
