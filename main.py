@@ -3,6 +3,27 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, Cal
 from utils import BOT_TOKEN
 import handlers
 from storage import read_json, write_json
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import random
+
+# Scheduler
+scheduler = AsyncIOScheduler()
+
+async def send_daily_verse(context):
+    verses = read_json("verses.json", [])
+    if not verses:
+        return
+    verse = random.choice(verses)
+    groups = read_json("groups.json", [])
+    for gid in groups:
+        try:
+            await context.bot.send_message(chat_id=int(gid), text=f"📖 Daily Verse\n{verse}")
+        except Exception:
+            continue
+
+# Job register (every day 8 AM)
+scheduler.add_job(send_daily_verse, "cron", hour=8, minute=0, args=[app])
+scheduler.start()
 
 
 os.makedirs("logs", exist_ok=True)
