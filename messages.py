@@ -11,9 +11,9 @@ START_MSG = (
     "/verse - ယနေ့ဖတ်ရန် ကျမ်းပိုဒ်\n"
     "/events - လာမည့် အစီအစဉ်များ\n"
     "/birthday - ယခုလ မွေးနေ့များ\n"
-    "/pray <text> - ဆုတောင်းပေးရန်\n"
+    "/pray <text> - ဆုတောင်းခံချက်ရေးရန်\n"
     "/quiz - ကျမ်းစာ ဉာဏ်စမ်း\n"
-    "/report <text> - အမှားတင်ပြရန်\n\n"
+    "/report <text> - အကြောင်းအရာတင်ပြရန်\n\n"
     f"powerby : {POWERED_BY}"
 )
 
