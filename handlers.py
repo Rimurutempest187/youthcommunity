@@ -73,7 +73,7 @@ async def events(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not events:
         await update.message.reply_text("လာမည့် အစီအစဉ် မရှိသေးပါ။")
         return
-    lines = [f"{e['date']} {e.get('time','')} - {e['title']} @ {e.get('place','')}" for e in events]
+    lines = [f"{e['date']} - {e.get('time','')} - {e['title']} - {e.get('place','')}" for e in events]
     await update.message.reply_text("\n".join(lines))
 
 async def eevents(update: Update, context: ContextTypes.DEFAULT_TYPE):
