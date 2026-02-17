@@ -1,4 +1,5 @@
-from telegram import Update, ChatAction
+from telegram import Update
+from telegram.constants import ChatAction
 from telegram.ext import ContextTypes
 from storage import read_json, write_json, read_text, write_text
 from messages import START_MSG, HELP_MSG
