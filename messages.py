@@ -1,6 +1,6 @@
 from config import CONFIG
 
-POWERED_BY = CONFIG.get("powered_by", "@Enoch777")
+POWERED_BY = CONFIG.get("powered_by", "@Enoch_777")
 
 START_MSG = (
     "မင်္ဂလာပါ။ Church Community Bot သို့ ကြိုဆိုပါတယ်။\n\n"
