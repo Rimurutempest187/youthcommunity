@@ -104,15 +104,18 @@ async def econtact(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Unknown subcommand. Use add|list|delete|clear.")
 
 
+import random
+from storage import read_json
+
 async def verse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     verses = read_json("verses.json", [])
     if not verses:
-        await update.message.reply_text("ယနေ့ဖတ်ရန် ကျမ်းပိုဒ် မရှိသေးပါ။ (Admin များ /eabout ဖြင့် ထည့်ပါ)")
+        await update.message.reply_text("ယနေ့ဖတ်ရန် ကျမ်းပိုဒ် မရှိသေးပါ။ Admin ထည့်ပေးပါ။")
         return
-    # simple: rotate by day index
-    import datetime
-    idx = datetime.date.today().toordinal() % len(verses)
-    await update.message.reply_text(verses[idx])
+    # random choice
+    v = random.choice(verses)
+    await update.message.reply_text(v)
+
 
 async def events(update: Update, context: ContextTypes.DEFAULT_TYPE):
     events = read_json("events.json", [])
