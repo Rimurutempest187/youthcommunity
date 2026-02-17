@@ -224,12 +224,26 @@ async def language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # simple toggle example
     await update.message.reply_text("ဘာသာစကားပြောင်းရန် feature မရှိသေးပါ။")
 
+
 async def report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("အသုံး: /report <text>")
         return
+
     text = " ".join(context.args)
     reports = read_json("reports.json", [])
     reports.append({"user": update.effective_user.full_name, "text": text})
     write_json("reports.json", reports)
+
+    # user confirmation
     await update.message.reply_text("Report received. ကျေးဇူးတင်ပါတယ်။")
+
+    # send to owner/admins
+    for admin_id in ADMIN_IDS:
+        try:
+            await context.bot.send_message(
+                chat_id=admin_id,
+                text=f"📢 Report from {update.effective_user.full_name}:\n{text}"
+            )
+        except Exception:
+            continue
