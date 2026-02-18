@@ -28,7 +28,7 @@ CREATE_QUIZZES = """
 CREATE TABLE IF NOT EXISTS quizzes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     question TEXT,
-    options TEXT, -- JSON string {"A": "...", "B": "..."}
+    options TEXT,
     answer_letter TEXT,
     difficulty TEXT,
     created_at TEXT
@@ -94,7 +94,7 @@ async def get_all_group_ids():
         return [r[0] for r in rows]
 
 # Quizzes
-async def insert_quiz(question: str, options: dict, answer_letter: str, difficulty: str = "hard"):
+async def insert_quiz(question: str, options: dict, answer_letter: str, difficulty: str = "normal"):
     async with aiosqlite.connect(DB_PATH) as db:
         now = datetime.utcnow().isoformat()
         await db.execute(
@@ -129,7 +129,7 @@ async def get_random_verse():
         row = await cur.fetchone()
         return row[0] if row else None
 
-# Migration helper to import JSON files
+# Migration helpers
 async def import_quizzes_from_json(path: str):
     if not os.path.exists(path):
         return 0
@@ -138,14 +138,12 @@ async def import_quizzes_from_json(path: str):
     count = 0
     for q in data:
         options = q.get("options")
-        # support both list and dict formats
         if isinstance(options, list):
-            # convert list to dict A-D
             letters = ["A", "B", "C", "D"]
             opts = {letters[i]: options[i] for i in range(min(len(options), 4))}
         else:
             opts = options
-        await insert_quiz(q.get("question"), opts, q.get("answer_letter", "A"), q.get("difficulty", "hard"))
+        await insert_quiz(q.get("question"), opts, q.get("answer_letter", "A"), q.get("difficulty", "normal"))
         count += 1
     return count
 
