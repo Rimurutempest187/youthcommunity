@@ -30,7 +30,7 @@ HELP_MSG = (
     "/pray <text> - ဆုတောင်းပေးရန်\n"
     "/quiz - ဉာဏ်စမ်း\n"
     "/leaderboard - quiz ranking ကြည့်ရန်\n"
-    "/report <text> - အမှားတင်ပြရန်\n\n"
+    "/report <text> - အကြောင်းအရာတင်ပြရန်\n\n"
     "Admin-only commands -\n"
     "/eabout, /econtact, /eevents, /ebirthday, /broadcast, /stats\n"
 )
