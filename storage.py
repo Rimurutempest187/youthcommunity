@@ -1,34 +1,39 @@
+# storage.py
 import json
+import os
 from pathlib import Path
 from typing import Any
-from utils import DATA_DIR
 
-def _path(name: str) -> Path:
-    return DATA_DIR / name
+BASE_DIR = Path(__file__).parent
+DATA_DIR = BASE_DIR / "data"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-def read_json(name: str, default: Any):
-    p = _path(name)
-    if not p.exists():
-        write_json(name, default)
+def _path(name: str) -> str:
+    p = Path(name)
+    if p.is_absolute():
+        return str(p)
+    return str(DATA_DIR / name)
+
+def read_json(name: str, default: Any = None) -> Any:
+    path = _path(name)
+    if not os.path.exists(path):
         return default
-    try:
-        with p.open("r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return default
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-def write_json(name: str, data: Any):
-    p = _path(name)
-    with p.open("w", encoding="utf-8") as f:
+def write_json(name: str, data: Any) -> None:
+    path = _path(name)
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 def read_text(name: str, default: str = "") -> str:
-    p = _path(name)
-    if not p.exists():
-        p.write_text(default, encoding="utf-8")
+    path = _path(name)
+    if not os.path.exists(path):
         return default
-    return p.read_text(encoding="utf-8")
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read()
 
-def write_text(name: str, text: str):
-    p = _path(name)
-    p.write_text(text, encoding="utf-8")
+def write_text(name: str, text: str) -> None:
+    path = _path(name)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
