@@ -1,6 +1,12 @@
+# utils.py
 import os
-from dotenv import load_dotenv
+from typing import Optional
 
-load_dotenv()
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_IDS = [int(x.strip()) for x in os.getenv("ADMIN_IDS","").split(",") if x.strip()]
+# Environment variables
+BOT_TOKEN: str = os.environ.get("BOT_TOKEN", "").strip()
+BOTEN: str = os.environ.get("BOTEN", "0").strip()  # "1" for English responses if needed
+
+def require_bot_token() -> None:
+    """Raise RuntimeError if BOT_TOKEN is not set."""
+    if not BOT_TOKEN:
+        raise RuntimeError("BOT_TOKEN is not set. Please set the BOT_TOKEN environment variable.")
