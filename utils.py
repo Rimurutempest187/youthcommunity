@@ -1,38 +1,25 @@
-# utils.py
 import os
-from typing import List
+from dotenv import load_dotenv
+from pathlib import Path
+import json
 
-def _env_str(key: str, default: str = "") -> str:
-    return os.environ.get(key, default).strip()
+load_dotenv()
 
-def get_bot_token() -> str:
-    return _env_str("BOT_TOKEN", "")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_IDS = [int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()]
 
-def require_bot_token() -> None:
-    if not get_bot_token():
-        raise RuntimeError("BOT_TOKEN is not set. Please set the BOT_TOKEN environment variable.")
+ROOT = Path(__file__).parent
+DATA_DIR = ROOT / "data"
+LOGS_DIR = ROOT / "logs"
+DATA_DIR.mkdir(exist_ok=True)
+LOGS_DIR.mkdir(exist_ok=True)
 
-def get_boten_flag() -> bool:
-    v = _env_str("BOTEN", "0").lower()
-    return v in ("1", "true", "yes", "on")
-
-def _parse_int_list(env_value: str) -> List[int]:
-    out: List[int] = []
-    for part in env_value.split(","):
-        part = part.strip()
-        if not part:
-            continue
+def load_config():
+    cfg_path = ROOT / "config.json"
+    if cfg_path.exists():
         try:
-            out.append(int(part))
-        except ValueError:
-            continue
-    return out
-
-def get_admin_ids() -> List[int]:
-    raw = _env_str("ADMIN_IDS", "")
-    return _parse_int_list(raw)
-
-# module-level convenience values
-BOT_TOKEN: str = get_bot_token()
-BOTEN: bool = get_boten_flag()
-ADMIN_IDS: List[int] = get_admin_ids()
+            return json.loads(cfg_path.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+    return {}
+CONFIG = load_config()
