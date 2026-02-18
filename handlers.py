@@ -1,16 +1,21 @@
-from telegram import Update, ReplyKeyboardMarkup
+# handlers.py
+import random
+import logging
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from storage import read_json, write_json, read_text, write_text
 from messages import START_MSG, HELP_MSG
 from utils import ADMIN_IDS
 
+logger = logging.getLogger(__name__)
+
 def is_admin(user_id: int) -> bool:
-    return user_id in ADMIN_IDS
+    return user_id in (ADMIN_IDS or [])
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     users = read_json("users.json", {})
-    users[str(user.id)] = {"id": user.id, "name": user.full_name}
+    users[str(user.id)] = {"id": user.id, "name": user.full_name, "score": users.get(str(user.id), {}).get("score", 0)}
     write_json("users.json", users)
     await update.message.reply_text(START_MSG)
 
@@ -46,31 +51,57 @@ async def econtact(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(uid):
         await update.message.reply_text("သင်သည် admin မဟုတ်ပါ။")
         return
-    if len(context.args) < 2:
-        await update.message.reply_text("အသုံး: /econtact <Name> <Phone>")
+    if not context.args:
+        await update.message.reply_text(
+            "အသုံး: /econtact add|list|delete|clear\n"
+            "Examples:\n"
+            "/econtact add Name Phone\n"
+            "/econtact list\n"
+            "/econtact delete Name\n"
+            "/econtact clear confirm"
+        )
         return
-    name = context.args[0]
-    phone = context.args[1]
+    sub = context.args[0].lower()
     contacts = read_json("contacts.json", {})
-    contacts[name] = phone
-    write_json("contacts.json", contacts)
-    await update.message.reply_text("Contacts updated.")
-
-async def verse(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    verses = read_json("verses.json", [])
-    if not verses:
-        await update.message.reply_text("ယနေ့ဖတ်ရန် ကျမ်းပိုဒ် မရှိသေးပါ။ (Admin များ /eabout ဖြင့် ထည့်ပါ)")
-        return
-    import datetime
-    idx = datetime.date.today().toordinal() % len(verses)
-    await update.message.reply_text(verses[idx])
+    if sub == "add":
+        if len(context.args) < 3:
+            await update.message.reply_text("အသုံး: /econtact add <Name> <Phone>")
+            return
+        name, phone = context.args[1], context.args[2]
+        contacts[name] = phone
+        write_json("contacts.json", contacts)
+        await update.message.reply_text(f"Contact added: {name} - {phone}")
+    elif sub == "list":
+        if not contacts:
+            await update.message.reply_text("Contacts မရှိသေးပါ။")
+            return
+        await update.message.reply_text("\n".join([f"{n} - {p}" for n, p in contacts.items()]))
+    elif sub == "delete":
+        if len(context.args) < 2:
+            await update.message.reply_text("အသုံး: /econtact delete <Name>")
+            return
+        name = context.args[1]
+        if name in contacts:
+            contacts.pop(name)
+            write_json("contacts.json", contacts)
+            await update.message.reply_text(f"Deleted contact: {name}")
+        else:
+            await update.message.reply_text(f"No contact named {name} found.")
+    elif sub == "clear":
+        if len(context.args) >= 2 and context.args[1].lower() == "confirm":
+            write_json("contacts.json", {})
+            await update.message.reply_text("All contacts cleared.")
+        else:
+            await update.message.reply_text("သတိပေးချက်: Contacts အားလုံး ဖျက်မည်။ ဆက်လက်ရန် `/econtact clear confirm` ရိုက်ပါ။")
+    else:
+        await update.message.reply_text("Unknown subcommand. Use add|list|delete|clear.")
 
 async def events(update: Update, context: ContextTypes.DEFAULT_TYPE):
     events = read_json("events.json", [])
     if not events:
         await update.message.reply_text("လာမည့် အစီအစဉ် မရှိသေးပါ။")
         return
-    lines = [f"{e.get('date','')} {e.get('time','')} - {e.get('title','')} @ {e.get('place','')}" for e in events]
+    lines = [f"{e['date']} - {e.get('time','')} - {e['title']} - {e.get('place','')}" for e in events]
     await update.message.reply_text("\n".join(lines))
 
 async def eevents(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -89,15 +120,13 @@ async def eevents(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if len(parts) < 3:
             await update.message.reply_text("အသုံး: /eevents add date|time|title|place")
             return
-        event = {"date": parts[0].strip(), "time": parts[1].strip(), "title": parts[2].strip(), "place": parts[3].strip() if len(parts) > 3 else ""}
+        event = {"date": parts[0].strip(), "time": parts[1].strip(), "title": parts[2].strip(), "place": parts[3].strip() if len(parts)>3 else ""}
         events.append(event)
         write_json("events.json", events)
         await update.message.reply_text("Event added.")
     elif cmd == "clear":
         write_json("events.json", [])
         await update.message.reply_text("Events cleared.")
-    elif cmd == "list":
-        await update.message.reply_text("\n".join([f"{i+1}. {ev.get('date','')} {ev.get('time','')} - {ev.get('title','')}" for i, ev in enumerate(events)]) or "No events.")
     else:
         await update.message.reply_text("Unknown subcommand.")
 
@@ -134,16 +163,81 @@ async def pray(update: Update, context: ContextTypes.DEFAULT_TYPE):
     write_json("prayers.json", prayers)
     await update.message.reply_text("သင်၏ ဆုတောင်းကို မှတ်တမ်းတင်ပြီးပါပြီ။")
 
-# Simple quiz (non-interactive)
-QUIZ_Q = {
-    "question": "ယေရှုခရစ်၏ မိဘများ၏ နာမည် ဘာလဲ?",
-    "options": ["မရိယာနှင့် ယိုးဆေ့", "ယိုးနန်နှင့် မာရီယာ", "မရိယာနှင့် ယိုးနန်", "မရိယာနှင့် ယာကုပ်"],
-    "answer_index": 2
-}
+async def verse(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    verses = read_json("verses.json", [])
+    if not verses:
+        await update.message.reply_text("ကျမ်းပိုဒ် မရှိသေးပါ။ Admin ထည့်ပေးပါ။")
+        return
+    v = random.choice(verses)
+    await update.message.reply_text(v)
 
 async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [[opt] for opt in QUIZ_Q["options"]]
-    await update.message.reply_text(QUIZ_Q["question"], reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True))
+    quizzes = read_json("quizzes.json", [])
+    if not quizzes:
+        await update.message.reply_text("Quiz မရှိသေးပါ။ Admin ထည့်ပေးပါ။")
+        return
+    q = random.choice(quizzes)
+    opts = q.get("options") or {}
+    if isinstance(opts, list):
+        letters = ["A","B","C","D"]
+        opts = {letters[i]: opts[i] for i in range(min(len(opts),4))}
+    sessions = read_json("sessions.json", {})
+    sessions[str(update.effective_user.id)] = q
+    write_json("sessions.json", sessions)
+    context.user_data["current_quiz"] = q
+    keyboard = [
+        [InlineKeyboardButton(f"A) {opts.get('A','')}", callback_data="quiz_A")],
+        [InlineKeyboardButton(f"B) {opts.get('B','')}", callback_data="quiz_B")],
+        [InlineKeyboardButton(f"C) {opts.get('C','')}", callback_data="quiz_C")],
+        [InlineKeyboardButton(f"D) {opts.get('D','')}", callback_data="quiz_D")]
+    ]
+    await update.message.reply_text(q.get("question","No question"), reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    q = context.user_data.get("current_quiz")
+    if not q:
+        sessions = read_json("sessions.json", {})
+        q = sessions.get(str(update.effective_user.id))
+        if not q:
+            await query.edit_message_text("Quiz မရှိပါ။ /quiz ဖြင့် စတင်ပါ။")
+            return
+    opts = q.get("options") or {}
+    if isinstance(opts, list):
+        letters = ["A","B","C","D"]
+        opts = {letters[i]: opts[i] for i in range(min(len(opts),4))}
+    parts = query.data.split("_")
+    if len(parts) < 2:
+        await query.edit_message_text("Invalid answer data.")
+        return
+    choice = parts[1].upper()
+    users = read_json("users.json", {})
+    uid = str(update.effective_user.id)
+    if uid not in users:
+        users[uid] = {"id": int(uid), "name": update.effective_user.full_name, "score": 0}
+    answer_letter = q.get("answer_letter")
+    if not answer_letter:
+        answer_index = q.get("answer_index")
+        if isinstance(answer_index, int):
+            letters = ["A","B","C","D"]
+            answer_letter = letters[answer_index] if answer_index < 4 else None
+    if choice == answer_letter:
+        users[uid]["score"] = users[uid].get("score",0) + 1
+        write_json("users.json", users)
+        await query.edit_message_text(f"✅ မှန်ကန်ပါတယ်! အဖြေ: {answer_letter}) {opts.get(answer_letter)}\n\nသင့် score: {users[uid]['score']}")
+    else:
+        write_json("users.json", users)
+        await query.edit_message_text(f"❌ မှားသွားပါတယ်။ အမှန်အဖြေက {answer_letter}) {opts.get(answer_letter)} ဖြစ်ပါတယ်။\n\nသင့် score: {users[uid].get('score',0)}")
+
+async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    users = read_json("users.json", {})
+    if not users:
+        await update.message.reply_text("Leaderboard မရှိသေးပါ။")
+        return
+    rows = sorted(users.values(), key=lambda x: x.get("score",0), reverse=True)[:10]
+    lines = [f"{i+1}. {r['name']} - {r.get('score',0)} points" for i,r in enumerate(rows)]
+    await update.message.reply_text("🏆 Leaderboard\n" + "\n".join(lines))
 
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -164,6 +258,13 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
             continue
     await update.message.reply_text(f"Broadcast sent to {sent} groups.")
 
+async def new_chat_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    groups = read_json("groups.json", [])
+    if chat.id not in groups:
+        groups.append(chat.id)
+        write_json("groups.json", groups)
+
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if not is_admin(uid):
@@ -172,9 +273,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     users = read_json("users.json", {})
     groups = read_json("groups.json", [])
     await update.message.reply_text(f"Users: {len(users)}\nGroups: {len(groups)}")
-
-async def language(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("ဘာသာစကားပြောင်းရန် feature မရှိသေးပါ။")
 
 async def report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
@@ -185,3 +283,8 @@ async def report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reports.append({"user": update.effective_user.full_name, "text": text})
     write_json("reports.json", reports)
     await update.message.reply_text("Report received. ကျေးဇူးတင်ပါတယ်။")
+    for admin_id in (ADMIN_IDS or []):
+        try:
+            await context.bot.send_message(chat_id=admin_id, text=f"📢 Report from {update.effective_user.full_name}:\n{text}")
+        except Exception:
+            continue
