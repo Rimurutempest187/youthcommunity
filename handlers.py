@@ -7,6 +7,8 @@ from utils import ADMIN_IDS
 import random
 from telegram.ext import CallbackQueryHandler
 from db import get_random_quiz, get_or_create_user, increment_user_score, get_leaderboard, get_random_verse, add_group_if_not_exists
+import json
+
 
 # helper
 def is_admin(user_id: int) -> bool:
@@ -181,7 +183,9 @@ QUIZ_Q = {
 
 
 
-# /verse command
+# handlers.py
+
+# /verse
 async def verse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     v = await get_random_verse()
     if not v:
@@ -189,14 +193,13 @@ async def verse(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await update.message.reply_text(v)
 
-# /quiz command
+# /quiz
 async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = await get_random_quiz()
     if not q:
         await update.message.reply_text("Quiz မရှိသေးပါ။ Admin ထည့်ပေးပါ။")
         return
 
-    # save quiz id in user_data to fetch later
     context.user_data["current_quiz_id"] = q["id"]
 
     keyboard = [
@@ -218,19 +221,16 @@ async def quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     choice = query.data.split("_")[1]  # "A"/"B"/...
-    # fetch quiz from DB by id
-    # simple approach: get_random_quiz returns random; we need quiz by id
-    # implement quick fetch here
-    from aiosqlite import connect
-    import json as _json
-    async with connect("data/bot.db") as db:
+    # fetch quiz by id
+    import aiosqlite
+    async with aiosqlite.connect("data/bot.db") as db:
         cur = await db.execute("SELECT question, options, answer_letter FROM quizzes WHERE id = ?", (quiz_id,))
         row = await cur.fetchone()
         if not row:
             await query.edit_message_text("Quiz မတွေ့ပါ။")
             return
         question, options_json, answer_letter = row[0], row[1], row[2]
-        options = _json.loads(options_json)
+        options = json.loads(options_json)
 
     uid = update.effective_user.id
     name = update.effective_user.full_name
@@ -241,9 +241,8 @@ async def quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(f"✅ မှန်ကန်ပါတယ်! အဖြေ: {answer_letter}) {options.get(answer_letter)}\n\nသင့် score: {new_score}")
     else:
         # get current score
-        # fetch score
-        from aiosqlite import connect as _connect
-        async with _connect("data/bot.db") as db:
+        import aiosqlite as _aiosqlite
+        async with _aiosqlite.connect("data/bot.db") as db:
             cur = await db.execute("SELECT score FROM users WHERE id = ?", (uid,))
             r = await cur.fetchone()
             score = r[0] if r else 0
