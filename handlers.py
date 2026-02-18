@@ -12,16 +12,23 @@ logger = logging.getLogger(__name__)
 def is_admin(user_id: int) -> bool:
     return user_id in (ADMIN_IDS or [])
 
+# /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     users = read_json("users.json", {})
-    users[str(user.id)] = {"id": user.id, "name": user.full_name, "score": users.get(str(user.id), {}).get("score", 0)}
+    users[str(user.id)] = {
+        "id": user.id,
+        "name": user.full_name,
+        "score": users.get(str(user.id), {}).get("score", 0)
+    }
     write_json("users.json", users)
     await update.message.reply_text(START_MSG)
 
+# /help
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(HELP_MSG)
 
+# /about
 async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = read_text("about.txt", "အသင်းအကြောင်း မရှိသေးပါ။ (Admin များ /eabout ဖြင့် ပြင်နိုင်သည်)")
     await update.message.reply_text(text)
@@ -38,6 +45,7 @@ async def eabout(update: Update, context: ContextTypes.DEFAULT_TYPE):
     write_text("about.txt", text)
     await update.message.reply_text("အသင်းအကြောင်းကို သိမ်းဆည်းပြီးပါပြီ။")
 
+# contact / econtact
 async def contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
     contacts = read_json("contacts.json", {})
     if not contacts:
@@ -96,6 +104,7 @@ async def econtact(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("Unknown subcommand. Use add|list|delete|clear.")
 
+# events / eevents
 async def events(update: Update, context: ContextTypes.DEFAULT_TYPE):
     events = read_json("events.json", [])
     if not events:
@@ -130,6 +139,7 @@ async def eevents(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("Unknown subcommand.")
 
+# birthday / ebirthday
 async def birthday(update: Update, context: ContextTypes.DEFAULT_TYPE):
     b = read_json("birthdays.json", [])
     if not b:
@@ -153,6 +163,7 @@ async def ebirthday(update: Update, context: ContextTypes.DEFAULT_TYPE):
     write_json("birthdays.json", b)
     await update.message.reply_text("Birthday added.")
 
+# pray
 async def pray(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("အသုံး: /pray <text>")
@@ -163,6 +174,7 @@ async def pray(update: Update, context: ContextTypes.DEFAULT_TYPE):
     write_json("prayers.json", prayers)
     await update.message.reply_text("သင်၏ ဆုတောင်းကို မှတ်တမ်းတင်ပြီးပါပြီ။")
 
+# verse (file-based)
 async def verse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     verses = read_json("verses.json", [])
     if not verses:
@@ -171,6 +183,7 @@ async def verse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     v = random.choice(verses)
     await update.message.reply_text(v)
 
+# quiz (file-based)
 async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
     quizzes = read_json("quizzes.json", [])
     if not quizzes:
@@ -181,6 +194,7 @@ async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if isinstance(opts, list):
         letters = ["A","B","C","D"]
         opts = {letters[i]: opts[i] for i in range(min(len(opts),4))}
+    # save session for fallback
     sessions = read_json("sessions.json", {})
     sessions[str(update.effective_user.id)] = q
     write_json("sessions.json", sessions)
@@ -193,6 +207,7 @@ async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     await update.message.reply_text(q.get("question","No question"), reply_markup=InlineKeyboardMarkup(keyboard))
 
+# quiz answer callback
 async def quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -230,6 +245,7 @@ async def quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         write_json("users.json", users)
         await query.edit_message_text(f"❌ မှားသွားပါတယ်။ အမှန်အဖြေက {answer_letter}) {opts.get(answer_letter)} ဖြစ်ပါတယ်။\n\nသင့် score: {users[uid].get('score',0)}")
 
+# leaderboard
 async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     users = read_json("users.json", {})
     if not users:
@@ -239,6 +255,15 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lines = [f"{i+1}. {r['name']} - {r.get('score',0)} points" for i,r in enumerate(rows)]
     await update.message.reply_text("🏆 Leaderboard\n" + "\n".join(lines))
 
+# new chat member (track group)
+async def new_chat_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    groups = read_json("groups.json", [])
+    if chat.id not in groups:
+        groups.append(chat.id)
+        write_json("groups.json", groups)
+
+# broadcast
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if not is_admin(uid):
@@ -258,13 +283,7 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
             continue
     await update.message.reply_text(f"Broadcast sent to {sent} groups.")
 
-async def new_chat_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat = update.effective_chat
-    groups = read_json("groups.json", [])
-    if chat.id not in groups:
-        groups.append(chat.id)
-        write_json("groups.json", groups)
-
+# stats
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if not is_admin(uid):
@@ -274,6 +293,36 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     groups = read_json("groups.json", [])
     await update.message.reply_text(f"Users: {len(users)}\nGroups: {len(groups)}")
 
+# language (added to fix AttributeError)
+async def language(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Simple language toggle placeholder.
+    Usage: /language set my  or /language get
+    """
+    if not context.args:
+        await update.message.reply_text("အသုံး: /language set <code>  or /language get")
+        return
+    sub = context.args[0].lower()
+    if sub == "get":
+        cfg = read_json("config.json", {})
+        lang = cfg.get("language_default") if isinstance(cfg, dict) else None
+        await update.message.reply_text(f"Current language: {lang or 'my'}")
+        return
+    if sub == "set":
+        if len(context.args) < 2:
+            await update.message.reply_text("အသုံး: /language set <code>")
+            return
+        code = context.args[1].strip()
+        cfg = read_json("config.json", {})
+        if not isinstance(cfg, dict):
+            cfg = {}
+        cfg["language_default"] = code
+        write_json("config.json", cfg)
+        await update.message.reply_text(f"Language set to: {code}")
+        return
+    await update.message.reply_text("Unknown subcommand. Use: /language get  or /language set <code>")
+
+# report
 async def report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("အသုံး: /report <text>")
