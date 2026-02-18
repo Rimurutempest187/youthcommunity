@@ -3,10 +3,13 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, Cal
 from utils import BOT_TOKEN
 import handlers
 from storage import read_json, write_json
+from utils import BOT_TOKEN
+import handlers
+from db import init_db, get_random_verse, get_all_group_ids
+from db import get_random_verse as _get_random_verse
 
-# logs folder create
+# logging
 os.makedirs("logs", exist_ok=True)
-
 logging.basicConfig(
     filename="logs/bot.log",
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -16,16 +19,19 @@ logging.basicConfig(
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN is not set. Please set it in .env")
 
-# Bot application
+# initialize DB
+import asyncio
+asyncio.run(init_db())
+
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-# Daily verse job
-async def send_daily_verse(context: ContextTypes.DEFAULT_TYPE):
-    verses = read_json("verses.json", [])
-    if not verses:
+# daily verse job
+async def send_daily_verse(context):
+    from db import get_random_verse, get_all_group_ids
+    verse = await get_random_verse()
+    if not verse:
         return
-    verse = random.choice(verses)
-    groups = read_json("groups.json", [])
+    groups = await get_all_group_ids()
     for gid in groups:
         try:
             await context.bot.send_message(chat_id=int(gid), text=f"📖 Daily Verse\n{verse}")
@@ -69,3 +75,5 @@ app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, new_chat_m
 if __name__ == "__main__":
     print("Bot starting...")
     app.run_polling()
+
+
