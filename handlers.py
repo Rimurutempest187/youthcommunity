@@ -6,6 +6,7 @@ from messages import START_MSG, HELP_MSG
 from utils import ADMIN_IDS
 import random
 from telegram.ext import CallbackQueryHandler
+from db import get_random_quiz, get_or_create_user, increment_user_score, get_leaderboard, get_random_verse, add_group_if_not_exists
 
 # helper
 def is_admin(user_id: int) -> bool:
@@ -103,19 +104,6 @@ async def econtact(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Unknown subcommand. Use add|list|delete|clear.")
 
 
-import random
-from storage import read_json
-
-async def verse(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    verses = read_json("verses.json", [])
-    if not verses:
-        await update.message.reply_text("ယနေ့ဖတ်ရန် ကျမ်းပိုဒ် မရှိသေးပါ။ Admin ထည့်ပေးပါ။")
-        return
-    # random choice
-    v = random.choice(verses)
-    await update.message.reply_text(v)
-
-
 async def events(update: Update, context: ContextTypes.DEFAULT_TYPE):
     events = read_json("events.json", [])
     if not events:
@@ -192,67 +180,89 @@ QUIZ_Q = {
 }
 
 
-import random
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes
-from storage import read_json, write_json
 
+# /verse command
+async def verse(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    v = await get_random_verse()
+    if not v:
+        await update.message.reply_text("ကျမ်းပိုဒ် မရှိသေးပါ။ Admin ထည့်ပေးပါ။")
+        return
+    await update.message.reply_text(v)
+
+# /quiz command
 async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    quizzes = read_json("quizzes.json", [])
-    if not quizzes:
+    q = await get_random_quiz()
+    if not q:
         await update.message.reply_text("Quiz မရှိသေးပါ။ Admin ထည့်ပေးပါ။")
         return
 
-    q = random.choice(quizzes)
-    context.user_data["current_quiz"] = q
+    # save quiz id in user_data to fetch later
+    context.user_data["current_quiz_id"] = q["id"]
 
     keyboard = [
-        [InlineKeyboardButton(f"A) {q['options']['A']}", callback_data="quiz_A")],
-        [InlineKeyboardButton(f"B) {q['options']['B']}", callback_data="quiz_B")],
-        [InlineKeyboardButton(f"C) {q['options']['C']}", callback_data="quiz_C")],
-        [InlineKeyboardButton(f"D) {q['options']['D']}", callback_data="quiz_D")]
+        [InlineKeyboardButton(f"A) {q['options'].get('A','')}", callback_data="quiz_A")],
+        [InlineKeyboardButton(f"B) {q['options'].get('B','')}", callback_data="quiz_B")],
+        [InlineKeyboardButton(f"C) {q['options'].get('C','')}", callback_data="quiz_C")],
+        [InlineKeyboardButton(f"D) {q['options'].get('D','')}", callback_data="quiz_D")]
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(q["question"], reply_markup=reply_markup)
+    await update.message.reply_text(q["question"], reply_markup=InlineKeyboardMarkup(keyboard))
 
+# callback for answer
 async def quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    q = context.user_data.get("current_quiz")
-    if not q:
+    quiz_id = context.user_data.get("current_quiz_id")
+    if not quiz_id:
         await query.edit_message_text("Quiz မရှိပါ။ /quiz ဖြင့် စတင်ပါ။")
         return
 
-    choice_letter = query.data.split("_")[1]  # "A","B","C","D"
-    correct_letter = q["answer_letter"]
+    choice = query.data.split("_")[1]  # "A"/"B"/...
+    # fetch quiz from DB by id
+    # simple approach: get_random_quiz returns random; we need quiz by id
+    # implement quick fetch here
+    from aiosqlite import connect
+    import json as _json
+    async with connect("data/bot.db") as db:
+        cur = await db.execute("SELECT question, options, answer_letter FROM quizzes WHERE id = ?", (quiz_id,))
+        row = await cur.fetchone()
+        if not row:
+            await query.edit_message_text("Quiz မတွေ့ပါ။")
+            return
+        question, options_json, answer_letter = row[0], row[1], row[2]
+        options = _json.loads(options_json)
 
-    users = read_json("users.json", {})
-    uid = str(update.effective_user.id)
-    if uid not in users:
-        users[uid] = {"id": update.effective_user.id,
-                      "name": update.effective_user.full_name,
-                      "score": 0}
+    uid = update.effective_user.id
+    name = update.effective_user.full_name
+    await get_or_create_user(uid, name)
 
-    if choice_letter == correct_letter:
-        users[uid]["score"] += 1
-        write_json("users.json", users)
-        await query.edit_message_text(
-            f"✅ မှန်ကန်ပါတယ်! အဖြေ: {correct_letter}) {q['options'][correct_letter]}\n\nသင့် score: {users[uid]['score']}"
-        )
+    if choice == answer_letter:
+        new_score = await increment_user_score(uid, 1)
+        await query.edit_message_text(f"✅ မှန်ကန်ပါတယ်! အဖြေ: {answer_letter}) {options.get(answer_letter)}\n\nသင့် score: {new_score}")
     else:
-        await query.edit_message_text(
-            f"❌ မှားသွားပါတယ်။ အမှန်အဖြေက {correct_letter}) {q['options'][correct_letter]} ဖြစ်ပါတယ်။\n\nသင့် score: {users[uid]['score']}"
-        )
+        # get current score
+        # fetch score
+        from aiosqlite import connect as _connect
+        async with _connect("data/bot.db") as db:
+            cur = await db.execute("SELECT score FROM users WHERE id = ?", (uid,))
+            r = await cur.fetchone()
+            score = r[0] if r else 0
+        await query.edit_message_text(f"❌ မှားသွားပါတယ်။ အမှန်အဖြေက {answer_letter}) {options.get(answer_letter)} ဖြစ်ပါတယ်။\n\nသင့် score: {score}")
 
+# /leaderboard
 async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    users = read_json("users.json", {})
-    if not users:
+    rows = await get_leaderboard(10)
+    if not rows:
         await update.message.reply_text("Leaderboard မရှိသေးပါ။")
         return
-    sorted_users = sorted(users.values(), key=lambda u: u.get("score",0), reverse=True)
-    lines = [f"{i+1}. {u['name']} - {u.get('score',0)} points" for i,u in enumerate(sorted_users)]
+    lines = [f"{i+1}. {r['name']} - {r['score']} points" for i, r in enumerate(rows)]
     await update.message.reply_text("🏆 Leaderboard\n" + "\n".join(lines))
+
+# track new group
+async def new_chat_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    await add_group_if_not_exists(chat.id, chat.title if chat.title else None)
+
 
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
